@@ -34,17 +34,31 @@ class JiraRoadmapIssue:
     jira_quarter:str
     jira_link:str
     summary:str = ''
-    description:str = ''
+    description:str = '',
+    beta:bool = False
 
-def get_roadmap_issues(jira_service, jql_filter, product_category_mode, product_category_prefix):
+def get_roadmap_issues(
+        jira_service, 
+        jira_project,
+        issue_type, 
+        product_category_mode, 
+        product_category_prefix, 
+        include_beta, 
+        beta_attribute_name
+    ):
     '''Retrieves all of the Roadmap Initiatives in Jira Cloud
 
     Args: 
         jira_service (JIRA): authenticated service used for interacting with jira
-        jql_filter (str): JQL compliant string to filter the specific issues
+        jira_project (str): unique name of the jira project
+        issue_type (str): name of the type of issues that represent roadmap items
         product_category_mode (str): 'components' or 'labels' 
+        include_beta (bool): whether beta roadmap items are included
+        beta_attribute_name (str): name of the attribute where the beta flag is held in jira
     '''
     
+    jql_filter = f'project = {jira_project} and issuetype = "{issue_type}"'
+
     roadmap_issue_ids = jira_service.search_issues(
         jql_str=jql_filter,
         maxResults=None
@@ -81,13 +95,28 @@ def get_roadmap_issues(jira_service, jql_filter, product_category_mode, product_
 
                 issue.fields.description = ''
 
+            beta_attr = getattr(issue.fields, beta_attribute_name)
+
+            if include_beta and beta_attr and beta_attr.value == "Beta":
+
+                beta_flag = True
+            
+            elif not include_beta and beta_attr.value == "Beta":
+            
+                continue
+
+            else: 
+
+                beta_flag = False
+
             roadmap_issues.append(JiraRoadmapIssue(
                 summary=issue.fields.summary,
                 description=issue.fields.description,
                 jira_id=issue_id.id,
                 product_categories=filtered_categories,
                 jira_quarter=issue.fields.status.name,
-                jira_link=issue.permalink()
+                jira_link=issue.permalink(),
+                beta = beta_flag
             ))
             
         return roadmap_issues
@@ -439,7 +468,7 @@ def gen_roadmap_slide_req(
     
     return request_body, slide_id
 
-def gen_roadmap_item_req(page_id, width, locx, locy, roadmap_box_config, tagline, description, link):
+def gen_roadmap_item_req(page_id, width, locx, locy, roadmap_box_config, tagline, description, link, beta):
     '''Creates the necessary request body for generating a roadmap item in Google Slides
 
     Args: 
@@ -451,6 +480,7 @@ def gen_roadmap_item_req(page_id, width, locx, locy, roadmap_box_config, tagline
         roadmap_box_config (dict): configuration of the roadmap boxes
         description (str): 1 - 2 sentences describing the roadmap intiative
         link (str): URL to the jira roadmap item
+        beta (bool): is the roadmap item a beta initiative
 
     Returns: 
         (List(dict)): request body to generate roadmap item
@@ -536,6 +566,75 @@ def gen_roadmap_item_req(page_id, width, locx, locy, roadmap_box_config, tagline
         }
     ]
 
+    if beta: 
+
+        beta_flag_element_id = str(uuid.uuid4())
+
+        beta_flag_req_body = [
+            {
+                "createShape": {
+                    "objectId": beta_flag_element_id,
+                    "shapeType": "FLOW_CHART_TERMINATOR",
+                    "elementProperties": {
+                        "pageObjectId": page_id,
+                        "size": {
+                            "height": {"magnitude": roadmap_box_config["height"]/4.5, "unit": "PT"}, 
+                            "width": {"magnitude": width/7, "unit": "PT"}
+                        },
+                        "transform": {
+                            "scaleX": 1,
+                            "scaleY": 1,
+                            "translateX": locx + width * 6/7 - 2,
+                            "translateY": locy + 2,
+                            "unit": "PT",
+                        }
+                    }
+                }
+            },
+            {
+                "updateShapeProperties" : {
+                    "fields" : "contentAlignment, \
+                        outline.outlineFill.solidFill.color.themeColor, \
+                        shapeBackgroundFill.solidFill.color.themeColor",
+                    "objectId": beta_flag_element_id,
+                    "shapeProperties" : {
+                        "contentAlignment": "MIDDLE",
+                        "outline": {"outlineFill": {"solidFill": {"color": {"themeColor":roadmap_box_config["beta_label_outline_color"]}}}},
+                        "shapeBackgroundFill":{"solidFill": {"color": {"themeColor":roadmap_box_config["beta_label_color"]}}}
+                    }
+                }
+            },
+            {
+                "insertText": {
+                    "objectId": beta_flag_element_id,
+                    "insertionIndex": 0,
+                    "text": "beta",
+                }
+            },
+            {
+                "updateTextStyle" : {
+                    "fields": "bold, fontFamily, fontSize.magnitude, fontSize.unit, foregroundColor.opaqueColor.themeColor",
+                    "objectId": beta_flag_element_id,
+                    "style" : {
+                        "fontFamily": "Manrope",
+                        "fontSize": {"magnitude": roadmap_box_config["beta_label_font_size"], "unit":"PT"},
+                        "foregroundColor": {"opaqueColor": {"themeColor":roadmap_box_config['beta_label_font_color']}}
+                    },
+                }
+            },
+            {
+                "updateParagraphStyle" : {
+                    "fields": "alignment",
+                    "objectId": beta_flag_element_id,
+                    "style" : {
+                        "alignment": "CENTER",
+                    },
+                }
+            }
+        ]
+
+        request_body += beta_flag_req_body
+
     return request_body, element_id
 
 def get_unique_product_groups(roadmap_issues):
@@ -620,12 +719,10 @@ def populate_roadmap_with_issues(
     roadmap_box_config = roadmap_slide_config['roadmap_box']
     arrow_config = roadmap_slide_config['timeline_arrow']
     left_header_config = roadmap_slide_config['left_header']
-    quarters_config = roadmap_slide_config['quarters']
-    quarter_marker_config = roadmap_slide_config['quarter_marker']
     columns_config = roadmap_slide_config['columns']
 
-    roadmap_box_width = (arrow_config['width'] - roadmap_box_config['x_padding'] * (quarters_config['num_quarter_groups'] + 1)) \
-        / quarters_config['num_quarter_groups']
+    roadmap_box_width = (arrow_config['width'] - roadmap_box_config['x_padding'] * (len(columns_config) + 1)) \
+        / len(columns_config)
     roadmap_box_locx = left_header_config['locx'] + left_header_config['width'] + roadmap_box_config['x_padding']
     roadmap_box_locy = left_header_config['locy'] + left_header_config['height']
     
@@ -658,7 +755,8 @@ def populate_roadmap_with_issues(
                             locx=locx,
                             locy=locy,
                             link=issue.jira_link,
-                            roadmap_box_config=roadmap_box_config
+                            roadmap_box_config=roadmap_box_config,
+                            beta = issue.beta
                         )
                 
                         roadmap_shapes.append(roadmap_shape)

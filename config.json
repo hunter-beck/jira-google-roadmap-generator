@@ -1,8 +1,11 @@
 {
     "jira_roadmap_issues": {
-        "jql_filter": "project = CDFNEW and issuetype = \"Roadmap Initiative\" and status in (\"Q1\", \"Q2\", \"Q3\", \"Q4\") ORDER BY Rank ASC",
+        "jira_project":"CDFNEW",
+        "issue_type":"Roadmap Initiative",
         "product_category_mode": "components",
-        "product_category_prefix": "Product - "
+        "product_category_prefix": "Product - ",
+        "include_beta":true,
+        "beta_attribute_name":"customfield_10933"
     },
     "left_header": {
         "shape_type": "ROUND_RECTANGLE",
@@ -38,14 +41,18 @@
     },
     "roadmap_box": {
         "description_length": 200,
-        "height": 50,
+        "height": 40,
         "font_size": 7,
         "font_color": "DARK1",
         "x_padding": 5,
         "y_padding": 5,
         "fill_color": "LIGHT1",
         "outline_color": "ACCENT1",
-        "shape_type": "ROUND_RECTANGLE"
+        "shape_type": "ROUND_RECTANGLE",
+        "beta_label_color": "DARK2",
+        "beta_label_font_color": "LIGHT1",
+        "beta_label_font_size": 6,
+        "beta_label_outline_color": "LIGHT1"
     },
     "quarters": {
         "quarter_jira_statuses": {
@@ -54,7 +61,6 @@
             "3": "Q3",
             "4": "Q4"
         },
-        "num_quarter_groups": 3,
         "group_quarters": [
             3,
             4
@@ -72,13 +78,6 @@
                 "Q3"
             ],
             "label": "Q3 2024"
-        },
-        {
-            "jira_statuses": [
-                "Q4",
-                "Q1"
-            ],
-            "label": "Q4 2024 - Q1 2025"
         }
     ]
 }
