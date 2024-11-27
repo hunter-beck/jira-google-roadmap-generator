@@ -97,11 +97,12 @@ def get_roadmap_issues(
 
             beta_attr = getattr(issue.fields, beta_attribute_name)
 
+
             if include_beta and beta_attr and beta_attr.value == "Beta":
 
                 beta_flag = True
             
-            elif not include_beta and beta_attr.value == "Beta":
+            elif not include_beta and beta_attr and beta_attr.value == "Beta":
             
                 continue
 
@@ -551,6 +552,8 @@ def gen_roadmap_item_req(page_id, width, locx, locy, roadmap_box_config, tagline
                 "objectId": element_id,
                 "style" : {
                     "alignment": "START",
+                    #"indentStart": {"magnitude": -0.1, "unit":"PT"},
+                    #"indentEnd": {"magnitude": width-0.1, "unit":"PT"}
                 },
             }
         },
